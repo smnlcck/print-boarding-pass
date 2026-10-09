@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boarding Pass Printer</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mukta:wght@300;400;500;600&display=swap">
+<style>
+:root{
+  --page:#dcdcdc;
+  --screen:#f5f5f5;
+  --ink:#3C3C3B;
+  --ink-strong:#1D1D1B;
+  --ink-soft:#63666A;
+  --teal:#006272;
+  --deep-teal:#083D4B;
+  --shamrock:#84BD00;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--page);font-family:'Mukta','Segoe UI',system-ui,sans-serif;color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;overflow:hidden}
+
+/* stage: phone scaled to fit the viewport */
+.stage{position:relative;width:calc(390px * var(--s,1) + 24px * var(--s,1));height:calc(844px * var(--s,1) + 24px * var(--s,1))}
+.device{position:absolute;left:0;top:0;width:414px;height:868px;transform-origin:0 0;transform:scale(var(--s,1));padding:12px;border-radius:58px;background:#1d1d1f;box-shadow:0 0 0 1px #3a3a3c inset,0 30px 60px rgba(0,0,0,.22),0 8px 18px rgba(0,0,0,.14)}
+.screen{position:relative;width:390px;height:844px;border-radius:46px;overflow:hidden;background:var(--screen)}
+
+.controls{margin-top:18px;display:flex;gap:10px}
+.controls button{font:500 14px/1 'Mukta',system-ui,sans-serif;height:40px;padding:0 18px;border-radius:20px;border:1px solid rgba(0,0,0,.14);background:#fff;color:var(--ink-strong);cursor:pointer}
+.controls button:hover{background:#f2f2f2}
+.controls button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+
+/* record mode: bare screen only */
+body.record{background:var(--screen)}
+body.record .controls{display:none}
+body.record .stage{width:390px;height:844px}
+body.record .device{transform:none;padding:0;border-radius:0;background:none;box-shadow:none;width:390px;height:844px}
+body.record .screen{border-radius:0}
+
+/* header */
+.header{position:absolute;left:0;top:0;width:390px;padding:20px 16px 0;display:flex;align-items:center;justify-content:space-between;z-index:4}
+.icon-btn{width:48px;height:48px;border-radius:24px;border:0;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.10)}
+.title{display:flex;flex-direction:column;align-items:center}
+.title b{font-size:18px;font-weight:600;color:var(--deep-teal);line-height:24px}
+.title span{font-size:14px;color:#4F5B5E;line-height:18px}
+.status{position:absolute;left:0;top:76px;width:390px;text-align:center;font-size:14px;line-height:18px;color:var(--teal);font-weight:500;z-index:4}
+
+/* printer */
+.printer{position:absolute;left:14px;top:102px;width:362px;height:56px;border-radius:18px;background:linear-gradient(180deg,#9A9C9F 0%,#808285 55%,#6E7073 100%);box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 -2px 0 rgba(0,0,0,.18) inset,0 12px 24px rgba(0,0,0,.18),0 2px 4px rgba(0,0,0,.16);z-index:3}
+.slot{position:absolute;left:9px;top:34px;width:344px;height:9px;border-radius:5px;background:#2A2B2D;box-shadow:0 1px 0 rgba(255,255,255,.12),0 2px 3px rgba(0,0,0,.6) inset}
+.led{position:absolute;right:16px;top:11px;width:8px;height:8px;border-radius:50%;background:#5E6063;box-shadow:inset 0 1px 1px rgba(0,0,0,.4);transition:background .3s,box-shadow .3s}
+.led.on{background:var(--shamrock);box-shadow:0 0 0 3px rgba(132,189,0,.18),0 0 10px rgba(132,189,0,.8)}
+.led.blink{animation:blink .5s ease-in-out infinite alternate}
+@keyframes blink{from{opacity:1}to{opacity:.35}}
+
+/* feed */
+.feed{position:absolute;left:23px;top:142px;width:344px;height:702px;overflow:hidden;z-index:2}
+.feed-shade{position:absolute;left:0;top:0;width:344px;height:30px;background:linear-gradient(180deg,rgba(30,30,32,.28),rgba(30,30,32,0));z-index:2;pointer-events:none}
+.tearwrap{transform-origin:85% 0}
+.tearwrap.is-printed{animation:settle .55s cubic-bezier(.3,1.4,.5,1) forwards}
+.tearwrap.is-tearing{animation:tearAway .95s cubic-bezier(.55,0,.75,.2) forwards}
+.pass{filter:drop-shadow(0 1px 1px rgba(0,0,0,.08)) drop-shadow(0 10px 18px rgba(0,0,0,.13));transform:translate3d(0,-101%,0)}
+.pass.is-printing{animation:printFeed 3200ms linear both}
+.pass.is-printed{transform:translate3d(0,0,0)}
+.paper{width:343px}
+.paper.is-printing{animation:buzz .07s steps(2) infinite}
+@keyframes printFeed{
+  0%  {transform:translate3d(0,-101%,0);animation-timing-function:cubic-bezier(.35,0,.45,1)}
+  11% {transform:translate3d(0,-89%,0)}
+  14% {transform:translate3d(0,-88.6%,0);animation-timing-function:cubic-bezier(.35,0,.45,1)}
+  31% {transform:translate3d(0,-67%,0)}
+  34% {transform:translate3d(0,-66.6%,0);animation-timing-function:cubic-bezier(.35,0,.45,1)}
+  52% {transform:translate3d(0,-44%,0)}
+  55% {transform:translate3d(0,-43.6%,0);animation-timing-function:cubic-bezier(.35,0,.45,1)}
+  74% {transform:translate3d(0,-20%,0)}
+  77% {transform:translate3d(0,-19.6%,0);animation-timing-function:cubic-bezier(.25,0,.2,1)}
+  100%{transform:translate3d(0,0,0)}
+}
+@keyframes buzz{0%{transform:translateX(-.35px)}100%{transform:translateX(.35px)}}
+@keyframes settle{0%{transform:translate3d(0,0,0) rotate(0)}45%{transform:translate3d(0,7px,0) rotate(.5deg)}100%{transform:translate3d(0,4px,0) rotate(.3deg)}}
+@keyframes tearAway{0%{transform:translate3d(0,4px,0) rotate(.3deg);opacity:1}14%{transform:translate3d(-2px,16px,0) rotate(-2.2deg);opacity:1}70%{opacity:1}100%{transform:translate3d(46px,118%,0) rotate(15deg);opacity:0}}
+
+/* pass content */
+.edge-bottom{height:12px;background:radial-gradient(circle at 9px 12px,transparent 6.5px,#fff 7px) 0 0/18px 12px repeat-x}
+.edge-top{height:12px;background:radial-gradient(circle at 9px 0,transparent 6.5px,#fff 7px) 0 0/18px 12px repeat-x}
+.notch{height:14px;position:relative;background:radial-gradient(circle at 0 50%,transparent 7px,#fff 7.5px) left/50% 100% no-repeat,radial-gradient(circle at 100% 50%,transparent 7px,#fff 7.5px) right/50% 100% no-repeat}
+.notch::after{content:"";position:absolute;left:12px;right:12px;top:6.5px;border-top:1px dashed #D0D0CE}
+.sec{background:#fff;padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;justify-content:space-between;align-items:flex-start}
+.col{display:flex;flex-direction:column}
+.col.r{align-items:flex-end}
+.lbl{font-size:12px;line-height:21px;font-weight:600;letter-spacing:.02em;color:var(--ink)}
+.val{font-size:17px;line-height:21px;color:var(--ink-soft)}
+.small{font-size:13px;line-height:21px;color:var(--ink)}
+.code{font-size:34px;line-height:36px;font-weight:300;color:var(--ink-strong);letter-spacing:-.01em}
+.group{border:1px solid var(--ink-soft);padding:4px 8px;font-size:16px;line-height:20px;font-weight:600;letter-spacing:.02em;color:var(--ink)}
+
+.tear-hit{position:absolute;left:23px;top:142px;width:344px;height:604px;z-index:3;border:0;background:transparent;cursor:grab;display:none}
+.tear-hit.show{display:block}
+
+/* footer */
+.footer{position:absolute;left:0;bottom:0;width:390px;padding:40px 20px 28px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(245,245,245,0) 0%,var(--screen) 42%);z-index:4}
+.wallet{height:48px;padding:0 22px;border-radius:24px;border:0;background:#000;color:#fff;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:inherit}
+.wallet span{display:flex;flex-direction:column;align-items:flex-start}
+
+@media (prefers-reduced-motion: reduce){
+  .pass.is-printing{animation-duration:.01s}
+  .paper.is-printing,.led.blink{animation:none}
+}
+</style>
+</head>
+<body>
+<main class="stage" aria-label="Animated boarding pass printer concept">
+  <div class="device">
+    <div class="screen">
+      <div class="header">
+        <button class="icon-btn" aria-label="Back" tabindex="-1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#083D4B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <div class="title"><b>Boarding pass</b><span>Dublin → London Heathrow</span></div>
+        <button class="icon-btn" aria-label="More options" tabindex="-1"><svg width="20" height="20" viewBox="0 0 24 24" fill="#083D4B"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+      </div>
+      <div class="status" id="status" aria-live="polite">Getting your boarding pass ready…</div>
+
+      <div class="printer"><div class="led" id="led"></div><div class="slot"></div></div>
+
+      <div class="feed">
+        <div class="feed-shade"></div>
+        <div class="tearwrap" id="tearwrap">
+          <div class="pass" id="pass">
+            <div class="paper" id="paper">
+              <div class="edge-top"></div>
+              <div class="sec" style="padding-top:2px;padding-bottom:12px">
+                <div class="row">
+                  <div style="display:flex;align-items:center;gap:22px;padding-top:11px">
+                    <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOTEiIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCA5MSAxOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KCjxnIGlkPSJCb2FyZGluZyBQYXNzIGlPUyI+CjxnIGlkPSJGcmFtZSAxMTMxIj4KCjxnIGlkPSJGcmFtZSA3MDEiPgoKPGcgaWQ9IkZyYW1lIDExMzciPgo8ZyBpZD0iZWktbG9nbyI+CjxnIGlkPSJlaS1sb2dvXzIiPgo8ZyBpZD0ic2hhbXJvY2siPgo8ZyBpZD0iYmctc2hhbXJvY2siPgo8cGF0aCBpZD0iYmctc2hhbW9yY2siIGZpbGwtcnVsZT0iZXZlbm9kZCIgY2xpcC1ydWxlPSJldmVub2RkIiBkPSJNODguMzU3MSAxLjA4MzIxQzg4LjI2MiAwLjA5MDAyNTcgODcuMjU0MiAtMC4yNzg3MDQgODYuMTQzIDAuMjIzNDY5Qzg1LjYxNDUgMC40NjIzNDEgODUuMTUyNCAwLjg1ODQ3NyA4NC44MjU0IDEuMzExMzJDODQuODc5NCAwLjg1ODgxNSA4NC43NTcgMC40NjAwNDEgODQuNDQ2MSAwLjIyMjcyNUM4My44MzM5IC0wLjI0NDczNCA4Mi43Mjk0IDAuMTAyNTQ0IDgxLjk3MiAwLjk2OTc5M0M4MS43MDcyIDEuMjczMDIgODAuODQ2NSAyLjM3MjMgODAuODAxNCAzLjk3ODg0QzgwLjc3OTUgNC43NTYxNSA4MS4xMDg0IDYuNDg0MDkgODIuMTg4NiA3LjY3NjE1Qzg1LjA2NTUgNi41MjkxNSA4Ni42MTI0IDQuNzc3NzQgODcuMTk4MyA0LjA1NjMyQzg3Ljg3ODggMy4yMTg1MSA4OC4xNjg4IDIuNDc4IDg4LjI4NzggMS45Mzg1NEM4OC4zODI5IDEuNTA3MDIgODguMzY4OCAxLjIwNDA2IDg4LjM1NzEgMS4wODMyMVpNODEuMTA3MyA4LjMzNDdDODAuNzEzNiA5LjAyNDkzIDc5LjY0NjggMTAuMTM0IDc4Ljc5NjkgMTAuNzA3MkM3Ny4wMzExIDExLjg5ODIgNzUuNzYwNCAxMS45NzYzIDc1LjEyNDggMTEuNTUxOEM3NS4wNTA5IDExLjUwMjQgNzQuOTg1NSAxMS40NDYzIDc0LjkyOSAxMS4zODQzQzc0LjQzMiAxMC44MzkgNzQuNTE2OSA5Ljg2MDkxIDc1LjA5NCA5LjA2MTEzQzc1LjM3OTUgOC42NjU2MSA3NS43NDAyIDguMzkwNTMgNzYuMDk3NCA4LjI2NDhDNzUuODIyMSA4LjEyNzA5IDc1LjYzNTQgNy44NDIgNzUuNTk3MSA3LjQ0MjYyQzc1LjUyMDUgNi42NDE5NiA3Ni4wOTE4IDUuNTkyNjEgNzYuODc5MSA1LjE2OTE0Qzc3LjU3NDggNC43OTQ5MyA3OS4wNjQ4IDQuNDI1NzMgODAuMTYzMiA2LjE1MzU5QzgwLjU5IDYuODI1MjEgODAuOTc4MiA3Ljc4MjU5IDgxLjEwNzMgOC4zMzQ3Wk05MC44NTk0IDkuNDNDOTAuNTI5MiAxMC41NDA5IDg5LjQ0MDggMTEuNTg1MiA4OC4xMzIgMTEuNzk1MUM4OC4zNDEzIDEyLjEzNzIgODguNDQwNiAxMi41NjQ4IDg4LjM4OSAxMy4wNDE1Qzg4LjI0OTMgMTQuMzMwMSA4Ny4wNzczIDE1LjM2NTQgODUuODI2NyAxNS4zNzU3Qzg0Ljk4IDE1LjM4MjggODMuODMxNSAxNC45OTUgODMuMDE5OCAxMy42NTA3QzgyLjI5NjggMTIuNDUzNCA4Mi4xODkzIDEwLjU1MTQgODIuMjQ0MyA5Ljk3NDMzQzgxLjM1ODQgMTAuOTMwNiA4MC44MDc2IDExLjg1NDQgODAuNTQ2MyAxMi41MDAzQzc5Ljk1NjkgMTMuOTU2NyA3OS43MzEgMTUuNzI5NCA3OS43NDQzIDE2LjU1ODVDNzkuNzQ0MyAxNi41NTg1IDc5LjYzODMgMTYuNjY0MiA3OS41MzQ0IDE2LjY4NzRDNzkuMjA2MyAxNi42MjU1IDc4LjkyMzkgMTYuNDk4MyA3OC43MDk5IDE2LjI5OTlDNzguNDUwMyAxNi4wNTkxIDc4LjM5NDIgMTUuODI2NCA3OC4zOTQyIDE1LjgyNjRDNzguNzg0MyAxMy43NjQ4IDc5LjQwNiAxMi40NzUzIDgwLjMzNjMgMTEuMDA2M0M4MS41OTA5IDkuMDI0OTMgODMuNTIxNyA3Ljc5NTQ1IDg1LjgxMTUgNy4wNTg4Qzg3LjQ2ODQgNi41MjU3NyA4OS4xODY3IDYuNDExNjggOTAuMzcwOCA3LjQ2NDk1QzkxLjAwNzIgOC4wMzEwNyA5MS4wNDQ2IDguODI4NTUgOTAuODU5NCA5LjQzWiIgZmlsbD0iIzg0QkQwMCIvPgo8L2c+CjxnIGlkPSJzaGFkb3ciPgo8cGF0aCBpZD0iRmlsbC00IiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsaXAtcnVsZT0iZXZlbm9kZCIgZD0iTTg3LjE5ODQgNC4wNTY0Qzg3Ljg3ODggMy4yMTg1OSA4OC4xNjg4IDIuNDc4MDggODguMjg3OCAxLjkzODYzQzg4LjI5NDIgMS45MDk1MyA4OC4zMDAxIDEuODgxMTEgODguMzA1NiAxLjg1MzIzQzg4LjE2NDEgMi40NTQ5NCA4Ni45NjA2IDQuMDExMiA4NS4yOTE0IDUuMzM4NDZDODMuNTYxNSA2LjcxNDA0IDgyLjU2OTUgNy40MDQ0NyA4Mi4xOTEgNy42NzUyMUM4NS4wNjY0IDYuNTI4MjkgODYuNjEyNyA0Ljc3NzYyIDg3LjE5ODQgNC4wNTY0WiIgZmlsbD0iIzQ4QTIzRiIvPgo8cGF0aCBpZD0iRmlsbC02IiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsaXAtcnVsZT0iZXZlbm9kZCIgZD0iTTc4Ljc5NyAxMC43MDczQzc5LjY0NjkgMTAuMTM0MSA4MC43MTM2IDkuMDI0OTkgODEuMTA3NCA4LjMzNDgzSDgxLjEwNzNDODAuMzQ3MiA5LjA5MTk4IDc5LjIzMTggMTAuMjI1MiA3Ny4zMTQyIDExLjExNThDNzYuMzYyNiAxMS41NDI4IDc1LjQzNTIgMTEuNzA1OSA3NS4xMjQ5IDExLjU1MTlDNzUuNzYwNCAxMS45NzYzIDc3LjAzMTIgMTEuODk4MiA3OC43OTcgMTAuNzA3M1oiIGZpbGw9IiM0OEEyM0YiLz4KPHBhdGggaWQ9IkZpbGwtOCIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik05MC44NTk0IDkuNDMwMTJDOTAuOTA0MyA5LjI4NDM2IDkwLjkzNjEgOS4xMjcxNiA5MC45NDk1IDguOTY0NDlDOTAuODU3MyA5LjYwODI5IDkwLjQ1MTIgMTAuMzg1NSA4OS43OTczIDEwLjgxMjlDODkuMjE4MiAxMS4xOTEzIDg4LjU1MDUgMTEuNDQ0NyA4Ny43OTQzIDExLjM3MzlDODcuOTE0NCAxMS40OTcyIDg4LjAxNCAxMS41OTYgODguMTMyMSAxMS43OTUyTDg4LjEzMjEgMTEuNzk1Mkw4OC4xMzIxIDExLjc5NTJDODkuNDQwOSAxMS41ODUzIDkwLjUyOTMgMTAuNTQxIDkwLjg1OTQgOS40MzAxMloiIGZpbGw9IiM0OEEyM0YiLz4KPHBhdGggaWQ9IkZpbGwtMTIiIGZpbGwtcnVsZT0iZXZlbm9kZCIgY2xpcC1ydWxlPSJldmVub2RkIiBkPSJNODIuNDEwMiA4Ljc2NjE0QzgwLjM1MTYgMTAuMzI1MyA3OS42NSAxMy4xMjI5IDc5LjUzNDQgMTYuNjg3Nkg3OS41MzQ2Qzc5LjYzODUgMTYuNjY0MSA3OS43NDQ0IDE2LjU1ODYgNzkuNzQ0NCAxNi41NTg2Qzc5LjczMTEgMTUuNzI5NSA3OS45NTcgMTMuOTU2OCA4MC41NDYzIDEyLjUwMDRDODAuODA3NyAxMS44NTQ2IDgxLjM1ODUgMTAuOTMwNyA4Mi4yNDQ0IDkuOTc0NDRDODIuMzA5OSA5LjMzOTM2IDgyLjM3NzEgOC45NjQ0OCA4Mi40MjUxIDguNzU0ODRDODIuNDIwMSA4Ljc1ODU2IDgyLjQxNTIgOC43NjI0MiA4Mi40MTAyIDguNzY2MTRaIiBmaWxsPSIjNDhBMjNGIi8+CjwvZz4KPC9nPgo8ZyBpZD0ibG9nb3R5cGUiPgo8cGF0aCBpZD0iRmlsbC0xNCIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik01MS4xNjAyIDExLjA1MDdDNTAuOTA5OCAxMS40ODkyIDUwLjQ2ODYgMTEuOTI2NyA0OS45MTY4IDEyLjA1NTFDNDkuOTE2OCAxMi4wNTUxIDQ4Ljg3ODUgMTEuNzQ1OSA0OC4yMDA5IDExLjQ5OTFDNDcuMjg5IDExLjE2NjcgNDYuODY0MiAxMC41NDI4IDQ2Ljg2NDIgOS41MzU0M0M0Ni44NjQyIDcuOTM4MDMgNDguMDc5OSA3LjIxMDUyIDQ5LjIwOTUgNy4yMTA1MkM1MC4zMzIyIDcuMjEwNTIgNTEuNTQwNiA3Ljk1MjU4IDUxLjU0MDYgOS41Mjk4MUM1MS41NDA2IDEwLjE3MDIgNTEuMzkyMiAxMC42NDQ1IDUxLjE2MDIgMTEuMDUwN1pNNTEuMzk5IDEyLjQ5NzRDNTIuNTkzNSAxMS44NjI4IDUzLjAyNDggMTAuNTY4NCA1My4wMjUyIDkuNTM1NDNDNTMuMDI1NSA4LjM3ODYyIDUyLjY4ODIgNy40NjU0MyA1Mi4wNDUyIDYuNzk3NTNDNTEuOTg4NyA2LjczODg2IDUxLjkyODggNi42ODM2NSA1MS44Njc1IDYuNjMwMTJMNTIuODk0OSA0LjgyMTE5SDUxLjM3MjlMNTAuNzE2NiA1Ljk3NjY0QzUwLjIxNjkgNS44MDA0MyA0OS42ODgzIDUuNzE4ODkgNDkuMjA5NSA1LjcxODg5QzQ4LjI1MjIgNS43MTg4OSA0Ny4yOTg1IDYuMDc4ODIgNDYuNTkzIDYuNzA2NjVDNDYuMDMzMSA3LjIwNDU2IDQ1LjM2NTcgOC4wOTk1NiA0NS4zNjU3IDkuNTM1NDNDNDUuMzY1NyAxMi4wMjg0IDQ3LjE0MzUgMTIuNjM4IDQ4Ljg2MjkgMTMuMjI3NUw0OS44MTkxIDEzLjU0NDlDNTAuODQwMyAxMy44NjYxIDUxLjQ1NjUgMTQuMDYwMSA1MS40NTY1IDE0LjkwNzFDNTEuNDU2NSAxNS4yOTQ1IDUxLjMyNjMgMTUuNjIxMyA1MS4wNjk3IDE1Ljg3ODFDNTAuNjY5NCAxNi4yNzg0IDQ5Ljk3MjggMTYuNDkyIDQ5LjIwNDkgMTYuNDQ4MUM0OC41MzE2IDE2LjQxMDIgNDcuMDk4OSAxNi4yNjQyIDQ2LjkyMzMgMTQuNzEzOEg0NS40NUM0NS40NSAxNi42OTI1IDQ3LjEyNDYgMTcuOTM5MiA0OS4yMDM0IDE3LjkzOTJDNTAuNTM4IDE3LjkzOTIgNTEuNTI3MSAxNy41NDAxIDUyLjE4ODUgMTYuODY2NEM1Mi43MDg1IDE2LjMzNjUgNTIuOTgzMiAxNS42NTM5IDUyLjk4MzIgMTQuODkyNEM1Mi45ODMyIDEzLjgwMzYgNTIuNDIyOCAxMi45NTk4IDUxLjM5OSAxMi40OTc0WiIgZmlsbD0iIzAwNjI3MiIvPgo8cGF0aCBpZD0iRmlsbC0xNyIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0zNC4wNzQ1IDEzLjg2NjhIMzUuNTg4N1Y1Ljk3NDkySDM0LjA3NDVWMTMuODY2OFoiIGZpbGw9IiMwMDYyNzIiLz4KPHBhdGggaWQ9IkZpbGwtMTkiIGZpbGwtcnVsZT0iZXZlbm9kZCIgY2xpcC1ydWxlPSJldmVub2RkIiBkPSJNMzMuOTg0NCA0LjAwMjg0QzMzLjk4NDQgMy41MDI2MyAzNC4yOTYyIDMuMTQ1MzMgMzQuODM4MyAzLjE0NTMzQzM1LjM2NyAzLjE0NTMzIDM1LjY3ODggMy41MDI2MyAzNS42Nzg4IDQuMDAyODRDMzUuNjc4OCA0LjUzMTY3IDM1LjM2NyA0Ljg4ODk3IDM0LjgzODMgNC44ODg5N0MzNC4yOTYyIDQuODg4OTcgMzMuOTg0NCA0LjUzMTY3IDMzLjk4NDQgNC4wMDI4NFoiIGZpbGw9IiMwMDYyNzIiLz4KPHBhdGggaWQ9IkZpbGwtMjEiIGZpbGwtcnVsZT0iZXZlbm9kZCIgY2xpcC1ydWxlPSJldmVub2RkIiBkPSJNMy4yMjc5MyA5Ljg2NDg0TDQuOTEzNjIgNS42OTYzNkw2LjU5OTEgOS44NjQ4NEgzLjIyNzkzWk01LjcwODM2IDMuNjU5MzFINC4xMzUwNUwwIDEzLjg2NjlIMS42MjcyOEwyLjY4MDQ2IDExLjI3MzRINy4xNjMyTDguMjE2NDQgMTMuODY2OUg5Ljg0Mzc5TDUuNzA4MzYgMy42NTkzMVoiIGZpbGw9IiMwMDYyNzIiLz4KPHBhdGggaWQ9IkZpbGwtMjMiIGZpbGwtcnVsZT0iZXZlbm9kZCIgY2xpcC1ydWxlPSJldmVub2RkIiBkPSJNMjguMjAwNyAzLjY1OTMzSDI2LjYwNDRWMTMuODY2OEgzMy4xNTQ0VjEyLjQ1ODNIMjguMjAwN1YzLjY1OTMzWiIgZmlsbD0iIzAwNjI3MiIvPgo8cGF0aCBpZD0iRmlsbC0yNSIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik02My42OTQ4IDYuMTEwNjFDNjIuODg3OCA2LjQ4ODI3IDYyLjQ0MjkgNy4xNzUzMSA2Mi40MDg1IDcuOTYxODNDNjIuMzI3NSA5LjgxMTMgNjMuNjY3MSAxMC4yNDQ5IDY1LjQ2MzcgMTAuNTA4NkM2Ni44OTcgMTAuNzE5IDY3LjcxMzYgMTAuOTQzMSA2Ny42ODA1IDExLjcwMTNDNjcuNjcwNCAxMS45MzE2IDY3LjQ4OTUgMTIuMjE5IDY3LjIyNTUgMTIuMzU4QzY2LjI2MTYgMTIuODY1MyA2My44MTg0IDEyLjU5NDkgNjIuNjY2NCAxMS44NDdMNjIuMzUxMyAxMy4xOTJDNjMuMDQ1NSAxMy42NjM4IDY0LjA4NTYgMTMuOTQxMyA2NS4wNzUzIDEzLjk5MDdDNjYuMTQ5NiAxNC4wNDQzIDY3LjIzMjkgMTMuOTY2MyA2OC4wMTQ0IDEzLjU2ODZDNjguNzc2OCAxMy4xODAyIDY5LjE3NDEgMTIuNDYzMSA2OS4yMDc2IDExLjY5ODlDNjkuMjg2OCA5Ljg4NzcgNjcuNjgyMyA5LjQ5MTE1IDY2LjE3OTIgOS4yMTUyN0M2NC40NjkzIDguOTAxNDggNjMuODUxNyA4LjcxOTA1IDYzLjg5NzEgNy45NDA2NUM2My45MTg2IDcuNTcxOTkgNjQuMjM2OCA3LjMzOTU1IDY0LjQ5NTMgNy4yNTUxNkM2NS40MjM0IDYuOTUyIDY3LjM4NDYgNy4xNTExNSA2OC41Mjk5IDcuODE1MTlMNjguODMyMSA2LjQ1NzA3QzY3LjMyOTQgNS42NzAwMSA2NS4wNjYyIDUuNDY5NTggNjMuNjk0OCA2LjExMDYxWiIgZmlsbD0iIzAwNjI3MiIvPgo8cGF0aCBpZD0iRmlsbC0yNyIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik00MC42MjQxIDUuODM1NzFDMzguOTYyNCA1LjgzNTcxIDM3Ljg0NTEgNi4wODkzMyAzNy4zMjcxIDYuMjQwNThMMzcuMjY2OCA2LjI1ODAzVjEzLjg2NjhIMzguNzk3NVY3LjM4MDUzQzM5LjMxOTMgNy4yNTE1NSAzOS43MjU1IDcuMjEzNTkgNDAuNTQxNyA3LjIxMzU5QzQxLjc5NjEgNy4yMTM1OSA0Mi42MzE3IDcuNTQ1MzcgNDIuNjMxNyA5LjE2NDQ5VjEzLjg2NjhINDQuMTQ1OFY5LjI0MTQzQzQ0LjE0NTggNi45ODE2MiA0Mi45NjEgNS44MzU3MSA0MC42MjQxIDUuODM1NzFaIiBmaWxsPSIjMDA2MjcyIi8+CjxwYXRoIGlkPSJGaWxsLTI5IiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsaXAtcnVsZT0iZXZlbm9kZCIgZD0iTTU5LjQ3ODQgMTIuNDc1NkM1OC45ODY0IDEyLjU4OTIgNTguNTM0MSAxMi42MjggNTcuNzM0MiAxMi42MjhDNTYuNDQzOSAxMi42MjggNTUuNjQ0MSAxMi4zMDQyIDU1LjY0NDEgMTAuNjkyN1Y1Ljk3NDg3SDU0LjEzVjEwLjYxNTNDNTQuMTMgMTIuODY1IDU1LjMxNDkgMTQuMDA1NyA1Ny42NTE3IDE0LjAwNTdDNTkuMjE0NyAxNC4wMDU3IDYwLjE5NDUgMTMuODAxNiA2MC45NDY5IDEzLjYwMTlMNjEuMDA5MSAxMy41ODUyVjUuOTc0ODdINTkuNDc4NFYxMi40NzU2WiIgZmlsbD0iIzAwNjI3MiIvPgo8cGF0aCBpZD0iRmlsbC0zMSIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0yMi4wMzA3IDUuODM2MDFDMjEuMDMyNiA1LjgzNjAxIDIwLjE5NjQgNi4wNDExMSAxOS42MzY5IDYuNDU5MTFDMTguODAzNyA3LjA4MTczIDE4LjQ3MyA4LjAyNDUgMTguNDczIDkuMjQxNDZWMTMuODY2OEgxOS45ODcxVjkuMTY0NDVDMTkuOTg3MSA4LjU4ODg2IDIwLjA5MzIgOC4xNzY2MiAyMC4yODU3IDcuODgzNDdDMjAuNjM0NyA3LjM1MiAyMS4yNjg4IDcuMjEyMiAyMi4wNzczIDcuMjEzNTVDMjIuNDU1NCA3LjIxNDIzIDIyLjg4NTMgNy4yNjI5NSAyMy4zMDkzIDcuMzQ4MzVMMjMuNjEyMiA2LjAwNDVDMjMuMTQzNyA1LjkwMzYxIDIyLjYxMjEgNS44MzYwMSAyMi4wMzA3IDUuODM2MDFaIiBmaWxsPSIjMDA2MjcyIi8+CjxwYXRoIGlkPSJGaWxsLTMzIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsaXAtcnVsZT0iZXZlbm9kZCIgZD0iTTEzLjU3ODQgNy4yMTM1NkMxNC40ODIzIDcuMjEzNTYgMTUuNTUyOSA3LjU1NTQ5IDE1LjYzMDQgOS4xNDcxNEgxMS41NDI3QzExLjYwNDUgNy44ODEzMiAxMi4zMDQ4IDcuMjEzNTYgMTMuNTc4NCA3LjIxMzU2Wk0xNy4xNTg1IDkuMTQ3MTRDMTYuOTc5NyA2Ljk3OCAxNS43NTE3IDUuODM1NjggMTMuNTc4NCA1LjgzNTY4QzExLjIyMDUgNS44MzU2OCA5Ljk3NDA2IDcuMTc4ODUgOS45NzQwNiA5LjcyMDA5VjEwLjEyMTRDOS45NzQwNiAxMi42NjI2IDExLjM1MTQgMTQuMDA1NyAxMy45NTY5IDE0LjAwNTdDMTUuMDE2MSAxNC4wMDU3IDE2LjAyNTMgMTMuODQxMSAxNi44ODE1IDEzLjUzMDFMMTYuNTYzMiAxMi4xODk0TDE2LjQ5NDcgMTIuMjE3QzE2LjAwMDUgMTIuNDE1OCAxNS4wNzQ0IDEyLjYyOCAxMy45NTY5IDEyLjYyOEMxMi44NjY5IDEyLjYyOCAxMS41NzEgMTIuMjY1NyAxMS41MzkxIDEwLjU1NTdIMTcuMTgyMlY5LjcyMDAzQzE3LjE4MjIgOS41MjE0OSAxNy4xNzM3IDkuMzMxMDYgMTcuMTU4NSA5LjE0NzE0WiIgZmlsbD0iIzAwNjI3MiIvPgo8L2c+CjwvZz4KPC9nPgo8L2c+CjwvZz4KPC9nPgo8L2c+Cjwvc3ZnPgo=" alt="Aer Lingus" width="91" height="18" style="display:block">
+                    <span style="font-size:18px;line-height:20px">D</span>
+                  </div>
+                  <div style="display:flex;gap:40px">
+                    <div class="col r"><span class="lbl">FARE</span><span class="val" style="font-size:18px;line-height:20px">Saver</span></div>
+                    <div class="col r"><span class="lbl">SEAT</span><span class="val" style="font-size:18px;line-height:20px">8A</span></div>
+                  </div>
+                </div>
+                <div class="row small">
+                  <div class="col"><span>Dublin</span><span>Terminal 2</span></div>
+                  <div class="col r"><span>London/Heathrow</span><span>Terminal 2</span></div>
+                </div>
+                <div class="row" style="align-items:center">
+                  <span class="code">DUB</span>
+                  <svg width="26" height="26" viewBox="0 0 24 24.0001" fill="#63666A" aria-hidden="true"><path d="M21.1563 13.1435C22.8988 13.1435 24 12.4062 24 12.0007L0.645378 12.0191C0.645374 12.1696 0.674641 12.1226 1.21008 12.3696L0 16.4613H1.21008L3.63025 13.0126C4.22811 13.0939 4.90753 13.1435 5.66723 13.1435H11.6975L7.2605 24.0001H8.53109L11.4555 20.3476H13.6336V19.2077H12.3682L14.3014 16.7931H16.2756V15.724H15.1574L17.2235 13.1435H21.1563Z"/><path d="M21.1563 10.8566C22.8988 10.8566 24 11.5939 24 11.9994L0.645378 12.0179C0.645374 11.8674 0.674641 11.8775 1.21008 11.6305L0 7.53882H1.21008L3.63025 10.9875C4.22811 10.9061 4.90753 10.8566 5.66723 10.8566H11.6975L7.2605 0H8.53109L11.4555 3.65246H13.6336V4.7924H12.3682L14.3014 7.20704H16.2756V8.27611H15.1574L17.2235 10.8566H21.1563Z"/></svg>
+                  <span class="code">LHR</span>
+                </div>
+                <div class="row small"><span>16:10</span><span>17:50</span></div>
+              </div>
+              <div class="notch"></div>
+              <div class="sec">
+                <div style="display:grid;grid-template-columns:83px 73px minmax(0,1fr) 81px;align-items:start">
+                  <div class="col"><span class="lbl">GATE CLOSES</span><span class="val" style="font-weight:600;color:#1D1D1B">15:45</span></div>
+                  <div class="col"><span class="lbl">SEQ NO.</span><span class="val">46</span></div>
+                  <div class="col r"><span class="lbl">DATE</span><span class="val">3 July 23</span></div>
+                  <div class="col r"><span class="lbl">FLIGHT</span><span class="val">EI178</span></div>
+                </div>
+                <div class="row">
+                  <div class="col" style="gap:10px">
+                    <div class="col" style="gap:2px"><span class="lbl">NAME</span><span class="val" style="color:#3C3C3B">David Searson</span></div>
+                    <div class="col" style="gap:2px"><span class="lbl">FREQUENT FLYER NO.</span><span class="val" style="color:#3C3C3B">12345678987654321</span></div>
+                  </div>
+                  <div class="col r" style="gap:2px"><span class="lbl">CARRY-ON BAG</span><span style="font-size:30px;line-height:30px;font-weight:300;color:#63666A">NO</span></div>
+                </div>
+              </div>
+              <div style="background:#fff;padding:4px 12px"><div class="group">BOARDING GROUP 3</div></div>
+              <div style="background:#fff;padding:28px 0 26px;display:flex;justify-content:center">
+                <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyOSAyOSIgd2lkdGg9IjI0MCIgaGVpZ2h0PSIyNDAiIHNoYXBlLXJlbmRlcmluZz0iY3Jpc3BFZGdlcyI+PHBhdGggZmlsbD0iIzFEMUQxQiIgZD0iTTAgMGgxdjFoLTF6TTEgMGgxdjFoLTF6TTIgMGgxdjFoLTF6TTMgMGgxdjFoLTF6TTQgMGgxdjFoLTF6TTUgMGgxdjFoLTF6TTYgMGgxdjFoLTF6TTggMGgxdjFoLTF6TTkgMGgxdjFoLTF6TTEyIDBoMXYxaC0xek0xNSAwaDF2MWgtMXpNMTggMGgxdjFoLTF6TTE5IDBoMXYxaC0xek0yMCAwaDF2MWgtMXpNMjIgMGgxdjFoLTF6TTIzIDBoMXYxaC0xek0yNCAwaDF2MWgtMXpNMjUgMGgxdjFoLTF6TTI2IDBoMXYxaC0xek0yNyAwaDF2MWgtMXpNMjggMGgxdjFoLTF6TTAgMWgxdjFoLTF6TTYgMWgxdjFoLTF6TTggMWgxdjFoLTF6TTE0IDFoMXYxaC0xek0xNyAxaDF2MWgtMXpNMTggMWgxdjFoLTF6TTIwIDFoMXYxaC0xek0yMiAxaDF2MWgtMXpNMjggMWgxdjFoLTF6TTAgMmgxdjFoLTF6TTIgMmgxdjFoLTF6TTMgMmgxdjFoLTF6TTQgMmgxdjFoLTF6TTYgMmgxdjFoLTF6TTkgMmgxdjFoLTF6TTExIDJoMXYxaC0xek0xMiAyaDF2MWgtMXpNMTMgMmgxdjFoLTF6TTE1IDJoMXYxaC0xek0xNiAyaDF2MWgtMXpNMTggMmgxdjFoLTF6TTE5IDJoMXYxaC0xek0yMCAyaDF2MWgtMXpNMjIgMmgxdjFoLTF6TTI0IDJoMXYxaC0xek0yNSAyaDF2MWgtMXpNMjYgMmgxdjFoLTF6TTI4IDJoMXYxaC0xek0wIDNoMXYxaC0xek0yIDNoMXYxaC0xek0zIDNoMXYxaC0xek00IDNoMXYxaC0xek02IDNoMXYxaC0xek04IDNoMXYxaC0xek05IDNoMXYxaC0xek0xMCAzaDF2MWgtMXpNMjIgM2gxdjFoLTF6TTI0IDNoMXYxaC0xek0yNSAzaDF2MWgtMXpNMjYgM2gxdjFoLTF6TTI4IDNoMXYxaC0xek0wIDRoMXYxaC0xek0yIDRoMXYxaC0xek0zIDRoMXYxaC0xek00IDRoMXYxaC0xek02IDRoMXYxaC0xek0xMCA0aDF2MWgtMXpNMTEgNGgxdjFoLTF6TTEyIDRoMXYxaC0xek0xNCA0aDF2MWgtMXpNMTUgNGgxdjFoLTF6TTE3IDRoMXYxaC0xek0yMiA0aDF2MWgtMXpNMjQgNGgxdjFoLTF6TTI1IDRoMXYxaC0xek0yNiA0aDF2MWgtMXpNMjggNGgxdjFoLTF6TTAgNWgxdjFoLTF6TTYgNWgxdjFoLTF6TTkgNWgxdjFoLTF6TTEwIDVoMXYxaC0xek0xMyA1aDF2MWgtMXpNMTUgNWgxdjFoLTF6TTE2IDVoMXYxaC0xek0xOSA1aDF2MWgtMXpNMjAgNWgxdjFoLTF6TTIyIDVoMXYxaC0xek0yOCA1aDF2MWgtMXpNMCA2aDF2MWgtMXpNMSA2aDF2MWgtMXpNMiA2aDF2MWgtMXpNMyA2aDF2MWgtMXpNNCA2aDF2MWgtMXpNNSA2aDF2MWgtMXpNNiA2aDF2MWgtMXpNOCA2aDF2MWgtMXpNMTAgNmgxdjFoLTF6TTEyIDZoMXYxaC0xek0xNCA2aDF2MWgtMXpNMTYgNmgxdjFoLTF6TTE4IDZoMXYxaC0xek0yMCA2aDF2MWgtMXpNMjIgNmgxdjFoLTF6TTIzIDZoMXYxaC0xek0yNCA2aDF2MWgtMXpNMjUgNmgxdjFoLTF6TTI2IDZoMXYxaC0xek0yNyA2aDF2MWgtMXpNMjggNmgxdjFoLTF6TTggN2gxdjFoLTF6TTEwIDdoMXYxaC0xek0xNCA3aDF2MWgtMXpNMTYgN2gxdjFoLTF6TTE3IDdoMXYxaC0xek0yMCA3aDF2MWgtMXpNMCA4aDF2MWgtMXpNMiA4aDF2MWgtMXpNMyA4aDF2MWgtMXpNNSA4aDF2MWgtMXpNNiA4aDF2MWgtMXpNNyA4aDF2MWgtMXpNMTAgOGgxdjFoLTF6TTEyIDhoMXYxaC0xek0xMyA4aDF2MWgtMXpNMTUgOGgxdjFoLTF6TTE2IDhoMXYxaC0xek0xNyA4aDF2MWgtMXpNMTggOGgxdjFoLTF6TTE5IDhoMXYxaC0xek0yMiA4aDF2MWgtMXpNMjUgOGgxdjFoLTF6TTI3IDhoMXYxaC0xek0yOCA4aDF2MWgtMXpNMCA5aDF2MWgtMXpNMiA5aDF2MWgtMXpNMyA5aDF2MWgtMXpNOSA5aDF2MWgtMXpNMTEgOWgxdjFoLTF6TTEyIDloMXYxaC0xek0xMyA5aDF2MWgtMXpNMTcgOWgxdjFoLTF6TTE4IDloMXYxaC0xek0xOSA5aDF2MWgtMXpNMjAgOWgxdjFoLTF6TTIxIDloMXYxaC0xek0yNCA5aDF2MWgtMXpNMjUgOWgxdjFoLTF6TTI4IDloMXYxaC0xek0wIDEwaDF2MWgtMXpNMSAxMGgxdjFoLTF6TTIgMTBoMXYxaC0xek02IDEwaDF2MWgtMXpNNyAxMGgxdjFoLTF6TTggMTBoMXYxaC0xek05IDEwaDF2MWgtMXpNMTEgMTBoMXYxaC0xek0xMiAxMGgxdjFoLTF6TTEzIDEwaDF2MWgtMXpNMTUgMTBoMXYxaC0xek0xNiAxMGgxdjFoLTF6TTE3IDEwaDF2MWgtMXpNMjAgMTBoMXYxaC0xek0yMyAxMGgxdjFoLTF6TTI1IDEwaDF2MWgtMXpNMjcgMTBoMXYxaC0xek0xIDExaDF2MWgtMXpNMyAxMWgxdjFoLTF6TTQgMTFoMXYxaC0xek04IDExaDF2MWgtMXpNOSAxMWgxdjFoLTF6TTEwIDExaDF2MWgtMXpNMTIgMTFoMXYxaC0xek0xNSAxMWgxdjFoLTF6TTE2IDExaDF2MWgtMXpNMTkgMTFoMXYxaC0xek0yMCAxMWgxdjFoLTF6TTIxIDExaDF2MWgtMXpNMjQgMTFoMXYxaC0xek0yOCAxMWgxdjFoLTF6TTEgMTJoMXYxaC0xek0zIDEyaDF2MWgtMXpNNCAxMmgxdjFoLTF6TTUgMTJoMXYxaC0xek02IDEyaDF2MWgtMXpNMTEgMTJoMXYxaC0xek0xNCAxMmgxdjFoLTF6TTE3IDEyaDF2MWgtMXpNMTkgMTJoMXYxaC0xek0yMiAxMmgxdjFoLTF6TTI2IDEyaDF2MWgtMXpNMCAxM2gxdjFoLTF6TTEgMTNoMXYxaC0xek01IDEzaDF2MWgtMXpNOCAxM2gxdjFoLTF6TTEwIDEzaDF2MWgtMXpNMTQgMTNoMXYxaC0xek0xNyAxM2gxdjFoLTF6TTIwIDEzaDF2MWgtMXpNMjEgMTNoMXYxaC0xek0yMiAxM2gxdjFoLTF6TTIzIDEzaDF2MWgtMXpNMjQgMTNoMXYxaC0xek0yNyAxM2gxdjFoLTF6TTI4IDEzaDF2MWgtMXpNMiAxNGgxdjFoLTF6TTMgMTRoMXYxaC0xek02IDE0aDF2MWgtMXpNNyAxNGgxdjFoLTF6TTkgMTRoMXYxaC0xek0xMCAxNGgxdjFoLTF6TTEzIDE0aDF2MWgtMXpNMTYgMTRoMXYxaC0xek0xNyAxNGgxdjFoLTF6TTIxIDE0aDF2MWgtMXpNMjIgMTRoMXYxaC0xek0yNCAxNGgxdjFoLTF6TTI1IDE0aDF2MWgtMXpNMjcgMTRoMXYxaC0xek0wIDE1aDF2MWgtMXpNMiAxNWgxdjFoLTF6TTcgMTVoMXYxaC0xek0xMSAxNWgxdjFoLTF6TTE0IDE1aDF2MWgtMXpNMTUgMTVoMXYxaC0xek0yMSAxNWgxdjFoLTF6TTIyIDE1aDF2MWgtMXpNMjMgMTVoMXYxaC0xek0yNCAxNWgxdjFoLTF6TTEgMTZoMXYxaC0xek00IDE2aDF2MWgtMXpNNSAxNmgxdjFoLTF6TTYgMTZoMXYxaC0xek0xMSAxNmgxdjFoLTF6TTE0IDE2aDF2MWgtMXpNMTcgMTZoMXYxaC0xek0yMCAxNmgxdjFoLTF6TTI0IDE2aDF2MWgtMXpNMjggMTZoMXYxaC0xek0yIDE3aDF2MWgtMXpNNCAxN2gxdjFoLTF6TTUgMTdoMXYxaC0xek0xMSAxN2gxdjFoLTF6TTEyIDE3aDF2MWgtMXpNMTQgMTdoMXYxaC0xek0xNiAxN2gxdjFoLTF6TTE5IDE3aDF2MWgtMXpNMjAgMTdoMXYxaC0xek0yMiAxN2gxdjFoLTF6TTI3IDE3aDF2MWgtMXpNMCAxOGgxdjFoLTF6TTIgMThoMXYxaC0xek02IDE4aDF2MWgtMXpNOSAxOGgxdjFoLTF6TTEwIDE4aDF2MWgtMXpNMTEgMThoMXYxaC0xek0xMiAxOGgxdjFoLTF6TTEzIDE4aDF2MWgtMXpNMTQgMThoMXYxaC0xek0xNSAxOGgxdjFoLTF6TTE4IDE4aDF2MWgtMXpNMjAgMThoMXYxaC0xek0yMSAxOGgxdjFoLTF6TTIyIDE4aDF2MWgtMXpNMjMgMThoMXYxaC0xek0yNCAxOGgxdjFoLTF6TTI4IDE4aDF2MWgtMXpNMiAxOWgxdjFoLTF6TTMgMTloMXYxaC0xek00IDE5aDF2MWgtMXpNOSAxOWgxdjFoLTF6TTEzIDE5aDF2MWgtMXpNMTQgMTloMXYxaC0xek0xOCAxOWgxdjFoLTF6TTE5IDE5aDF2MWgtMXpNMjEgMTloMXYxaC0xek0yMiAxOWgxdjFoLTF6TTI2IDE5aDF2MWgtMXpNMjcgMTloMXYxaC0xek0xIDIwaDF2MWgtMXpNNCAyMGgxdjFoLTF6TTUgMjBoMXYxaC0xek02IDIwaDF2MWgtMXpNOCAyMGgxdjFoLTF6TTExIDIwaDF2MWgtMXpNMTMgMjBoMXYxaC0xek0xNCAyMGgxdjFoLTF6TTE1IDIwaDF2MWgtMXpNMTYgMjBoMXYxaC0xek0xNyAyMGgxdjFoLTF6TTE5IDIwaDF2MWgtMXpNMjAgMjBoMXYxaC0xek0yMSAyMGgxdjFoLTF6TTIyIDIwaDF2MWgtMXpNMjMgMjBoMXYxaC0xek0yNCAyMGgxdjFoLTF6TTI2IDIwaDF2MWgtMXpNMjcgMjBoMXYxaC0xek04IDIxaDF2MWgtMXpNMTEgMjFoMXYxaC0xek0xMiAyMWgxdjFoLTF6TTE1IDIxaDF2MWgtMXpNMTYgMjFoMXYxaC0xek0xNyAyMWgxdjFoLTF6TTE4IDIxaDF2MWgtMXpNMjAgMjFoMXYxaC0xek0yNCAyMWgxdjFoLTF6TTI1IDIxaDF2MWgtMXpNMjggMjFoMXYxaC0xek0wIDIyaDF2MWgtMXpNMSAyMmgxdjFoLTF6TTIgMjJoMXYxaC0xek0zIDIyaDF2MWgtMXpNNCAyMmgxdjFoLTF6TTUgMjJoMXYxaC0xek02IDIyaDF2MWgtMXpNOCAyMmgxdjFoLTF6TTkgMjJoMXYxaC0xek0xMCAyMmgxdjFoLTF6TTEyIDIyaDF2MWgtMXpNMTQgMjJoMXYxaC0xek0xNSAyMmgxdjFoLTF6TTE2IDIyaDF2MWgtMXpNMTcgMjJoMXYxaC0xek0xOSAyMmgxdjFoLTF6TTIwIDIyaDF2MWgtMXpNMjIgMjJoMXYxaC0xek0yNCAyMmgxdjFoLTF6TTAgMjNoMXYxaC0xek02IDIzaDF2MWgtMXpNOCAyM2gxdjFoLTF6TTExIDIzaDF2MWgtMXpNMTMgMjNoMXYxaC0xek0xNCAyM2gxdjFoLTF6TTE3IDIzaDF2MWgtMXpNMjAgMjNoMXYxaC0xek0yNCAyM2gxdjFoLTF6TTI3IDIzaDF2MWgtMXpNMCAyNGgxdjFoLTF6TTIgMjRoMXYxaC0xek0zIDI0aDF2MWgtMXpNNCAyNGgxdjFoLTF6TTYgMjRoMXYxaC0xek05IDI0aDF2MWgtMXpNMTIgMjRoMXYxaC0xek0xNSAyNGgxdjFoLTF6TTIwIDI0aDF2MWgtMXpNMjEgMjRoMXYxaC0xek0yMiAyNGgxdjFoLTF6TTIzIDI0aDF2MWgtMXpNMjQgMjRoMXYxaC0xek0yNyAyNGgxdjFoLTF6TTI4IDI0aDF2MWgtMXpNMCAyNWgxdjFoLTF6TTIgMjVoMXYxaC0xek0zIDI1aDF2MWgtMXpNNCAyNWgxdjFoLTF6TTYgMjVoMXYxaC0xek04IDI1aDF2MWgtMXpNMTAgMjVoMXYxaC0xek0xMyAyNWgxdjFoLTF6TTE3IDI1aDF2MWgtMXpNMTggMjVoMXYxaC0xek0yMSAyNWgxdjFoLTF6TTIyIDI1aDF2MWgtMXpNMjcgMjVoMXYxaC0xek0wIDI2aDF2MWgtMXpNMiAyNmgxdjFoLTF6TTMgMjZoMXYxaC0xek00IDI2aDF2MWgtMXpNNiAyNmgxdjFoLTF6TTggMjZoMXYxaC0xek05IDI2aDF2MWgtMXpNMTEgMjZoMXYxaC0xek0xMiAyNmgxdjFoLTF6TTE0IDI2aDF2MWgtMXpNMTYgMjZoMXYxaC0xek0xNyAyNmgxdjFoLTF6TTE4IDI2aDF2MWgtMXpNMTkgMjZoMXYxaC0xek0yMCAyNmgxdjFoLTF6TTIyIDI2aDF2MWgtMXpNMjUgMjZoMXYxaC0xek0yNiAyNmgxdjFoLTF6TTI4IDI2aDF2MWgtMXpNMCAyN2gxdjFoLTF6TTYgMjdoMXYxaC0xek05IDI3aDF2MWgtMXpNMTAgMjdoMXYxaC0xek0xMiAyN2gxdjFoLTF6TTEzIDI3aDF2MWgtMXpNMTQgMjdoMXYxaC0xek0xNSAyN2gxdjFoLTF6TTE4IDI3aDF2MWgtMXpNMTkgMjdoMXYxaC0xek0yNSAyN2gxdjFoLTF6TTI3IDI3aDF2MWgtMXpNMjggMjdoMXYxaC0xek0wIDI4aDF2MWgtMXpNMSAyOGgxdjFoLTF6TTIgMjhoMXYxaC0xek0zIDI4aDF2MWgtMXpNNCAyOGgxdjFoLTF6TTUgMjhoMXYxaC0xek02IDI4aDF2MWgtMXpNOCAyOGgxdjFoLTF6TTEwIDI4aDF2MWgtMXpNMTEgMjhoMXYxaC0xek0xNCAyOGgxdjFoLTF6TTE3IDI4aDF2MWgtMXpNMTkgMjhoMXYxaC0xek0yMCAyOGgxdjFoLTF6TTIxIDI4aDF2MWgtMXpNMjUgMjhoMXYxaC0xeiIvPjwvc3ZnPg==" alt="Boarding pass QR code" width="124" height="124" style="display:block">
+              </div>
+              <div class="edge-bottom"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="tear-hit" id="tearHit" aria-label="Tear off boarding pass"></button>
+
+      <div class="footer">
+        <button class="icon-btn" id="reprint" aria-label="Reprint boarding pass"><svg width="20" height="20" viewBox="0 0 20 20" fill="#006272" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M18.6133 4.98047H16.25V0H3.75V4.98047H1.38672C1.00911 4.98047 0.683595 5.11719 0.410156 5.39062C0.136717 5.66406 0 5.98958 0 6.36719V14.8438C0 15.2344 0.136717 15.5664 0.410156 15.8398C0.683595 16.1133 1.00911 16.25 1.38672 16.25H3.75V20H16.25V16.25H18.6133C18.9909 16.25 19.3164 16.1133 19.5898 15.8398C19.8633 15.5664 20 15.2344 20 14.8438V6.36719C20 5.98958 19.8633 5.66406 19.5898 5.39062C19.3164 5.11719 18.9909 4.98047 18.6133 4.98047ZM5 1.23047H15V4.98047H5V1.23047ZM15 18.75H5V11.8555H15V18.75ZM18.75 14.8438C18.75 14.8828 18.737 14.9186 18.7109 14.9512C18.6849 14.9837 18.6523 15 18.6133 15H16.25V10.6055H3.75V14.9805H1.38672C1.34766 14.9805 1.3151 14.9674 1.28906 14.9414C1.26302 14.9154 1.25 14.8828 1.25 14.8438V6.36719C1.25 6.32812 1.26302 6.29557 1.28906 6.26953C1.3151 6.24349 1.34766 6.23047 1.38672 6.23047H18.6133C18.6523 6.23047 18.6849 6.24349 18.7109 6.26953C18.737 6.29557 18.75 6.32812 18.75 6.36719V14.8438ZM16.25 7.48047C16.4193 7.48047 16.5658 7.54232 16.6895 7.66602C16.8132 7.78971 16.875 7.9362 16.875 8.10547C16.875 8.28776 16.8132 8.4375 16.6895 8.55469C16.5658 8.67188 16.4193 8.73047 16.25 8.73047H15.625C15.4557 8.73047 15.3092 8.67188 15.1855 8.55469C15.0618 8.4375 15 8.28776 15 8.10547C15 7.9362 15.0618 7.78971 15.1855 7.66602C15.3092 7.54232 15.4557 7.48047 15.625 7.48047H16.25Z"/></svg></button>
+        <button class="wallet" aria-label="Add to Apple Wallet" tabindex="-1">
+          <svg width="24" height="20" viewBox="0 0 24 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="1.5" width="21" height="17" rx="4"/><path d="M1.5 9h6.2c.6 0 1 .3 1.3.8.6 1.3 1.8 2.2 3 2.2s2.4-.9 3-2.2c.3-.5.7-.8 1.3-.8h6.2"/></svg>
+          <span><span style="font-size:11px;line-height:13px">Add to</span><span style="font-size:17px;line-height:19px;font-weight:500">Apple Wallet</span></span>
+        </button>
+        <button class="icon-btn" aria-label="Share boarding pass" tabindex="-1"><svg width="18" height="21" viewBox="0 0 15 18" fill="#006272" aria-hidden="true"><path d="M14.375 7.375C14.6985 7.375 14.965 7.621 14.9965 7.936L15 8V15.375C15.0001 16.0525 14.7381 16.7039 14.269 17.1927C13.7999 17.6816 13.16 17.9701 12.483 17.998L12.375 18H2.625C1.94747 18.0001 1.29615 17.7381 0.807287 17.269C0.318423 16.7999 0.0298755 16.16 0.00199986 15.483L0 15.375V8C0.000516775 7.84014 0.0622714 7.68655 0.172563 7.57083C0.282854 7.4551 0.433296 7.38604 0.592949 7.37785C0.752602 7.36965 0.909327 7.42294 1.03089 7.52676C1.15245 7.63058 1.22961 7.77703 1.2465 7.936L1.25 8V15.375C1.24998 15.7251 1.38355 16.0621 1.62345 16.3172C1.86335 16.5722 2.19151 16.7261 2.541 16.7475L2.625 16.75H12.375C12.7252 16.75 13.0623 16.6164 13.3173 16.3764C13.5724 16.1364 13.7262 15.8081 13.7475 15.4585L13.75 15.375V8C13.75 7.655 14.03 7.375 14.375 7.375ZM3.045 4.072L6.9345 0.183003C7.04337 0.0741602 7.18858 0.00932721 7.3423 0.000930911C7.49601 -0.00746539 7.64742 0.0411657 7.7675 0.137503L7.818 0.183003L11.707 4.072C11.8212 4.18478 11.8876 4.33715 11.8925 4.49757C11.8974 4.65798 11.8404 4.81413 11.7334 4.93368C11.6263 5.05322 11.4773 5.12699 11.3173 5.13971C11.1574 5.15243 10.9986 5.10312 10.874 5.002L10.8235 4.956L8 2.1325V12.25C8.00007 12.4047 7.94274 12.554 7.83911 12.6689C7.73548 12.7838 7.59292 12.8562 7.439 12.872L7.375 12.875C7.22027 12.8751 7.07102 12.8177 6.95612 12.7141C6.84122 12.6105 6.76884 12.4679 6.753 12.314L6.75 12.25V2.1345L3.929 4.956C3.82013 5.06484 3.67492 5.12968 3.5212 5.13807C3.36749 5.14647 3.21608 5.09784 3.096 5.0015L3.045 4.9565C2.93609 4.84754 2.87127 4.7022 2.86296 4.54837C2.85466 4.39453 2.90346 4.24306 3 4.123L3.045 4.072Z"/></svg></button>
+      </div>
+    </div>
+  </div>
+</main>
+<div class="controls">
+  <button id="toggle" aria-pressed="true">Pause loop</button>
+  <button id="restart">Restart</button>
+</div>
+
+<script>
+(function(){
+  var params = new URLSearchParams(location.search);
+  if (params.has('record')) document.body.classList.add('record');
+
+  // Scale the phone to fit the viewport
+  function fit(){
+    if (document.body.classList.contains('record')) return;
+    var s = Math.min(1, (innerHeight - 96) / 868, (innerWidth - 32) / 414);
+    document.documentElement.style.setProperty('--s', Math.max(.4, s).toFixed(3));
+  }
+  addEventListener('resize', fit); fit();
+
+  var PRINT = 3200, HOLD = 1900, TEAR = 980, GAP = 650, START = 700;
+  var pass = document.getElementById('pass'), paper = document.getElementById('paper'),
+      wrap = document.getElementById('tearwrap'), led = document.getElementById('led'),
+      status = document.getElementById('status'), hit = document.getElementById('tearHit'),
+      toggle = document.getElementById('toggle');
+  var phase = 'empty', looping = true, timers = [];
+
+  function later(fn, ms){ timers.push(setTimeout(fn, ms)); }
+  function clear(){ timers.forEach(clearTimeout); timers = []; }
+  function restartAnim(el){ void el.offsetWidth; }
+
+  function set(p){
+    phase = p;
+    pass.className = 'pass' + (p === 'printing' ? ' is-printing' : (p === 'empty' ? '' : ' is-printed'));
+    paper.className = 'paper' + (p === 'printing' ? ' is-printing' : '');
+    wrap.className = 'tearwrap' + (p === 'printed' ? ' is-printed' : (p === 'tearing' ? ' is-tearing' : ''));
+    led.className = 'led' + (p === 'printing' ? ' on blink' : (p === 'printed' ? ' on' : ''));
+    hit.classList.toggle('show', p === 'printed');
+    status.textContent = {
+      empty: 'Getting your boarding pass ready…',
+      printing: 'Printing your boarding pass…',
+      printed: 'All set. Tap your pass to tear it off',
+      tearing: 'Torn off. Have a great flight'
+    }[p];
+    restartAnim(pass);
+  }
+
+  function print(){
+    clear(); set('empty'); restartAnim(pass); set('printing');
+    later(function(){
+      set('printed');
+      if (looping) later(tear, HOLD);
+    }, PRINT + 40);
+  }
+  function tear(){
+    if (phase !== 'printed') return;
+    clear(); set('tearing');
+    later(function(){
+      set('empty');
+      if (looping) later(print, GAP);
+    }, TEAR);
+  }
+
+  hit.addEventListener('click', function(){
+    if (phase !== 'printed') return;
+    clear(); set('tearing');
+    later(function(){ set('empty'); later(print, GAP); }, TEAR);
+  });
+  document.getElementById('reprint').addEventListener('click', function(){
+    if (phase === 'printed') hit.click(); else if (phase === 'empty') print();
+  });
+  toggle.addEventListener('click', function(){
+    looping = !looping;
+    toggle.textContent = looping ? 'Pause loop' : 'Resume loop';
+    toggle.setAttribute('aria-pressed', String(looping));
+    if (looping && phase === 'printed') later(tear, 600);
+    if (looping && phase === 'empty') later(print, 300);
+  });
+  document.getElementById('restart').addEventListener('click', function(){ clear(); set('empty'); later(print, 300); });
+
+  // Deterministic seek for frame-accurate video export (?record=1&seek=1)
+  if (params.has('seek')) {
+    var P = PRINT + 40, cycle = [['printing',0,P],['printed',P,P+HOLD],['tearing',P+HOLD,P+HOLD+TEAR],['empty',P+HOLD+TEAR,P+HOLD+TEAR+GAP]];
+    window.__cycleMs = P + HOLD + TEAR + GAP;
+    window.__seek = function(t){
+      var seg = cycle.filter(function(c){ return t >= c[1] && t < c[2]; })[0] || cycle[3];
+      if (phase !== seg[0]) {
+        document.getAnimations().forEach(function(a){ a.cancel(); });
+        set(seg[0]); void document.body.offsetWidth;
+      }
+      document.getAnimations().forEach(function(a){ a.pause(); a.currentTime = Math.max(0, t - seg[1]); });
+    };
+    return;
+  }
+
+  later(print, START);
+})();
+</script>
+</body>
+</html>
