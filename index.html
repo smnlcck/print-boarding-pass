@@ -61,7 +61,6 @@ body.record .screen{border-radius:0}
 .feed-shade{position:absolute;left:0;top:0;width:344px;height:30px;background:linear-gradient(180deg,rgba(30,30,32,.28),rgba(30,30,32,0));z-index:2;pointer-events:none}
 .tearwrap{transform-origin:85% 0}
 .tearwrap.is-printed{animation:settle .55s cubic-bezier(.3,1.4,.5,1) forwards}
-.tearwrap.is-tearing{animation:tearAway .95s cubic-bezier(.55,0,.75,.2) forwards}
 .pass{filter:drop-shadow(0 1px 1px rgba(0,0,0,.08)) drop-shadow(0 10px 18px rgba(0,0,0,.13));transform:translate3d(0,-101%,0)}
 .pass.is-printing{animation:printFeed 3200ms linear both}
 .pass.is-printed{transform:translate3d(0,0,0)}
@@ -81,7 +80,6 @@ body.record .screen{border-radius:0}
 }
 @keyframes buzz{0%{transform:translateX(-.35px)}100%{transform:translateX(.35px)}}
 @keyframes settle{0%{transform:translate3d(0,0,0) rotate(0)}45%{transform:translate3d(0,7px,0) rotate(.5deg)}100%{transform:translate3d(0,4px,0) rotate(.3deg)}}
-@keyframes tearAway{0%{transform:translate3d(0,4px,0) rotate(.3deg);opacity:1}14%{transform:translate3d(-2px,16px,0) rotate(-2.2deg);opacity:1}70%{opacity:1}100%{transform:translate3d(46px,118%,0) rotate(15deg);opacity:0}}
 
 /* pass content */
 .edge-bottom{height:12px;background:radial-gradient(circle at 9px 12px,transparent 6.5px,#fff 7px) 0 0/18px 12px repeat-x}
@@ -98,8 +96,6 @@ body.record .screen{border-radius:0}
 .code{font-size:34px;line-height:36px;font-weight:300;color:var(--ink-strong);letter-spacing:-.01em}
 .group{border:1px solid var(--ink-soft);padding:4px 8px;font-size:16px;line-height:20px;font-weight:600;letter-spacing:.02em;color:var(--ink)}
 
-.tear-hit{position:absolute;left:23px;top:142px;width:344px;height:604px;z-index:3;border:0;background:transparent;cursor:grab;display:none}
-.tear-hit.show{display:block}
 
 /* footer */
 .footer{position:absolute;left:0;bottom:0;width:390px;padding:40px 20px 28px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(245,245,245,0) 0%,var(--screen) 42%);z-index:4}
@@ -179,7 +175,6 @@ body.record .screen{border-radius:0}
         </div>
       </div>
 
-      <button class="tear-hit" id="tearHit" aria-label="Tear off boarding pass"></button>
 
       <div class="footer">
         <button class="icon-btn" id="reprint" aria-label="Reprint boarding pass"><svg width="20" height="20" viewBox="0 0 20 20" fill="#006272" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M18.6133 4.98047H16.25V0H3.75V4.98047H1.38672C1.00911 4.98047 0.683595 5.11719 0.410156 5.39062C0.136717 5.66406 0 5.98958 0 6.36719V14.8438C0 15.2344 0.136717 15.5664 0.410156 15.8398C0.683595 16.1133 1.00911 16.25 1.38672 16.25H3.75V20H16.25V16.25H18.6133C18.9909 16.25 19.3164 16.1133 19.5898 15.8398C19.8633 15.5664 20 15.2344 20 14.8438V6.36719C20 5.98958 19.8633 5.66406 19.5898 5.39062C19.3164 5.11719 18.9909 4.98047 18.6133 4.98047ZM5 1.23047H15V4.98047H5V1.23047ZM15 18.75H5V11.8555H15V18.75ZM18.75 14.8438C18.75 14.8828 18.737 14.9186 18.7109 14.9512C18.6849 14.9837 18.6523 15 18.6133 15H16.25V10.6055H3.75V14.9805H1.38672C1.34766 14.9805 1.3151 14.9674 1.28906 14.9414C1.26302 14.9154 1.25 14.8828 1.25 14.8438V6.36719C1.25 6.32812 1.26302 6.29557 1.28906 6.26953C1.3151 6.24349 1.34766 6.23047 1.38672 6.23047H18.6133C18.6523 6.23047 18.6849 6.24349 18.7109 6.26953C18.737 6.29557 18.75 6.32812 18.75 6.36719V14.8438ZM16.25 7.48047C16.4193 7.48047 16.5658 7.54232 16.6895 7.66602C16.8132 7.78971 16.875 7.9362 16.875 8.10547C16.875 8.28776 16.8132 8.4375 16.6895 8.55469C16.5658 8.67188 16.4193 8.73047 16.25 8.73047H15.625C15.4557 8.73047 15.3092 8.67188 15.1855 8.55469C15.0618 8.4375 15 8.28776 15 8.10547C15 7.9362 15.0618 7.78971 15.1855 7.66602C15.3092 7.54232 15.4557 7.48047 15.625 7.48047H16.25Z"/></svg></button>
@@ -193,8 +188,7 @@ body.record .screen{border-radius:0}
   </div>
 </main>
 <div class="controls">
-  <button id="toggle" aria-pressed="true">Pause loop</button>
-  <button id="restart">Restart</button>
+  <button id="restart">Replay</button>
 </div>
 
 <script>
@@ -210,72 +204,46 @@ body.record .screen{border-radius:0}
   }
   addEventListener('resize', fit); fit();
 
-  var PRINT = 3200, HOLD = 1900, TEAR = 980, GAP = 650, START = 700;
+  var PRINT = 3200, START = 700;
   var pass = document.getElementById('pass'), paper = document.getElementById('paper'),
       wrap = document.getElementById('tearwrap'), led = document.getElementById('led'),
-      status = document.getElementById('status'), hit = document.getElementById('tearHit'),
-      toggle = document.getElementById('toggle');
-  var phase = 'empty', looping = true, timers = [];
+      status = document.getElementById('status');
+  var phase = 'empty', timers = [];
 
   function later(fn, ms){ timers.push(setTimeout(fn, ms)); }
   function clear(){ timers.forEach(clearTimeout); timers = []; }
-  function restartAnim(el){ void el.offsetWidth; }
 
   function set(p){
     phase = p;
     pass.className = 'pass' + (p === 'printing' ? ' is-printing' : (p === 'empty' ? '' : ' is-printed'));
     paper.className = 'paper' + (p === 'printing' ? ' is-printing' : '');
-    wrap.className = 'tearwrap' + (p === 'printed' ? ' is-printed' : (p === 'tearing' ? ' is-tearing' : ''));
+    wrap.className = 'tearwrap' + (p === 'printed' ? ' is-printed' : '');
     led.className = 'led' + (p === 'printing' ? ' on blink' : (p === 'printed' ? ' on' : ''));
-    hit.classList.toggle('show', p === 'printed');
     status.textContent = {
       empty: 'Getting your boarding pass ready…',
       printing: 'Printing your boarding pass…',
-      printed: 'All set. Tap your pass to tear it off',
-      tearing: 'Torn off. Have a great flight'
+      printed: 'All set. Have a great flight'
     }[p];
-    restartAnim(pass);
+    void pass.offsetWidth;
   }
 
   function print(){
-    clear(); set('empty'); restartAnim(pass); set('printing');
-    later(function(){
-      set('printed');
-      if (looping) later(tear, HOLD);
-    }, PRINT + 40);
-  }
-  function tear(){
-    if (phase !== 'printed') return;
-    clear(); set('tearing');
-    later(function(){
-      set('empty');
-      if (looping) later(print, GAP);
-    }, TEAR);
+    clear(); set('empty'); set('printing');
+    later(function(){ set('printed'); }, PRINT + 40);
   }
 
-  hit.addEventListener('click', function(){
-    if (phase !== 'printed') return;
-    clear(); set('tearing');
-    later(function(){ set('empty'); later(print, GAP); }, TEAR);
-  });
   document.getElementById('reprint').addEventListener('click', function(){
-    if (phase === 'printed') hit.click(); else if (phase === 'empty') print();
-  });
-  toggle.addEventListener('click', function(){
-    looping = !looping;
-    toggle.textContent = looping ? 'Pause loop' : 'Resume loop';
-    toggle.setAttribute('aria-pressed', String(looping));
-    if (looping && phase === 'printed') later(tear, 600);
-    if (looping && phase === 'empty') later(print, 300);
+    if (phase !== 'printing') print();
   });
   document.getElementById('restart').addEventListener('click', function(){ clear(); set('empty'); later(print, 300); });
 
   // Deterministic seek for frame-accurate video export (?record=1&seek=1)
   if (params.has('seek')) {
-    var P = PRINT + 40, cycle = [['printing',0,P],['printed',P,P+HOLD],['tearing',P+HOLD,P+HOLD+TEAR],['empty',P+HOLD+TEAR,P+HOLD+TEAR+GAP]];
-    window.__cycleMs = P + HOLD + TEAR + GAP;
+    var P = PRINT + 40, HOLD = 3000;
+    var cycle = [['empty',-1000,0],['printing',0,P],['printed',P,P+HOLD]];
+    window.__cycleMs = P + HOLD;
     window.__seek = function(t){
-      var seg = cycle.filter(function(c){ return t >= c[1] && t < c[2]; })[0] || cycle[3];
+      var seg = cycle.filter(function(c){ return t >= c[1] && t < c[2]; })[0] || cycle[2];
       if (phase !== seg[0]) {
         document.getAnimations().forEach(function(a){ a.cancel(); });
         set(seg[0]); void document.body.offsetWidth;
